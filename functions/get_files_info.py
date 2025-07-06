@@ -18,4 +18,4 @@ def get_files_info(working_directory, directory=None):
             files_info.append(f'- {file}: file_size={size} bytes, is_dir={is_dir}')
         return "\n".join(files_info)
     except Exception as e:
-        return f'Error: Could not list files in "{directory}"'
+        return f'Error: Could not list files in "{directory}": {str(e)}'
