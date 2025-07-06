@@ -3,26 +3,55 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 import sys
+from functions.get_files_info import schema_get_files_info
 
-user_prompt = sys.argv[1] if len(sys.argv) > 1 else sys.exit("Usage: python main.py '<your prompt>'")
-second_arg = sys.argv[2] if len(sys.argv) > 2 else ""
+def main():
+    user_prompt = sys.argv[1] if len(sys.argv) > 1 else sys.exit("Usage: python main.py '<your prompt>'")
+    second_arg = sys.argv[2] if len(sys.argv) > 2 else ""
 
-load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
+    system_prompt = """
+    You are a helpful AI coding agent.
 
-client = genai.Client(api_key=api_key)
+    When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
 
-messages = [
-    types.Content(role="user", parts=[types.Part(text=user_prompt)]),
-]
+    - List files and directories
 
-response = client.models.generate_content(
-    model="gemini-2.0-flash-001",
-    contents=messages
-)
+    All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+    """
 
-print(response.text)
-if second_arg.lstrip("-") == "verbose":
-    print(f"User prompt: {user_prompt}")
-    print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-    print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
+
+    client = genai.Client(api_key=api_key)
+
+    messages = [
+        types.Content(role="user", parts=[types.Part(text=user_prompt)]),
+    ]
+
+    available_functions = types.Tool(
+        function_declarations=[
+            schema_get_files_info,
+        ]
+    )
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-001",
+        contents=messages,
+        config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt),
+    )
+
+    function_calls = response.function_calls
+
+    if function_calls != None:
+        for call in function_calls:
+            print(f"Calling function: {call.name}({call.args})")
+    else:
+        print(response.text)
+
+    if second_arg.lstrip("-") == "verbose":
+        print(f"User prompt: {user_prompt}")
+        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
+if __name__ == "__main__":
+    main()
