@@ -8,7 +8,7 @@ from functions.get_file_content import schema_get_file_content
 from functions.write_file import schema_write_file
 from functions.run_python import schema_run_python_file
 from functions.call_function import call_function
-from config import system_prompt
+from config import system_prompt, MAX_ITERS
 
 def main():
     load_dotenv()
@@ -34,7 +34,20 @@ def main():
         types.Content(role="user", parts=[types.Part(text=user_prompt)]),
     ]
 
-    generate_content(client, messages, verbose)
+    i = 0
+    while True:
+        i += 1
+        if i > MAX_ITERS:
+            print(f"Maximum iterations ({MAX_ITERS}) reached.")
+            sys.exit(1)
+
+        try:
+            response_text = generate_content(client, messages, verbose)
+            if response_text:
+                print(f"Final response: {response_text}")
+                break
+        except Exception as e:
+            print(f"Error in generate_content: {e}")
 
 def generate_content(client, messages, verbose):
     available_functions = types.Tool(
@@ -54,6 +67,11 @@ def generate_content(client, messages, verbose):
         ),
     )
 
+    if response.candidates:
+        for candidate in response.candidates:
+            function_call_content = candidate.content
+            messages.append(function_call_content)
+
     function_calls = response.function_calls
     function_responses = []
     if function_calls:
@@ -66,6 +84,9 @@ def generate_content(client, messages, verbose):
             function_responses.append(result.parts[0])
         if not function_responses:
             raise Exception("no function responses generated, exiting.")
+
+        messages.append(types.Content(role="tool", parts=function_responses))
+
     else:
         return(response.text)
 
